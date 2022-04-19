@@ -3,6 +3,13 @@ package com.tutorials.hazelcastsessionsharing.config;
 import com.hazelcast.client.HazelcastClient;
 import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.client.config.ClientUserCodeDeploymentConfig;
+import com.hazelcast.config.AttributeConfig;
+import com.hazelcast.config.Config;
+import com.hazelcast.config.IndexConfig;
+import com.hazelcast.config.IndexType;
+import com.hazelcast.config.IntegrityCheckerConfig;
+import com.hazelcast.config.UserCodeDeploymentConfig;
+import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
@@ -16,6 +23,7 @@ import org.springframework.session.SaveMode;
 import org.springframework.session.Session;
 import org.springframework.session.config.SessionRepositoryCustomizer;
 import org.springframework.session.hazelcast.Hazelcast4IndexedSessionRepository;
+import org.springframework.session.hazelcast.Hazelcast4PrincipalNameExtractor;
 import org.springframework.session.hazelcast.Hazelcast4SessionUpdateEntryProcessor;
 import org.springframework.session.hazelcast.config.annotation.SpringSessionHazelcastInstance;
 import org.springframework.session.hazelcast.config.annotation.web.http.EnableHazelcastHttpSession;
@@ -30,24 +38,32 @@ public class SessionConfiguration {
   @Bean
   @SpringSessionHazelcastInstance
   public HazelcastInstance hazelcastInstance() {
-    ClientConfig clientConfig = new ClientConfig();
-    clientConfig.setClusterName("hello-world");
-    //clientConfig.getNetworkConfig().addAddress("172.18.0.2:5701");
+    Config config = new Config();
+    config.setClusterName("hello-world");
 
-    ClientUserCodeDeploymentConfig clientUserCodeDeploymentConfig = new ClientUserCodeDeploymentConfig();
-    clientUserCodeDeploymentConfig.setEnabled(true);
-    clientUserCodeDeploymentConfig.addClass(Session.class)
-        .addClass(MapSession.class)
-        .addClass(Hazelcast4SessionUpdateEntryProcessor.class);
-    /* clientConfig.setClassLoader(Session.class.getClassLoader());*/
+    // Add this attribute to be able to query sessions by their PRINCIPAL_NAME_ATTRIBUTE's
+    AttributeConfig attributeConfig = new AttributeConfig()
+        .setName(Hazelcast4IndexedSessionRepository.PRINCIPAL_NAME_ATTRIBUTE)
+        .setExtractorClassName(Hazelcast4PrincipalNameExtractor.class.getName());
+    config.setIntegrityCheckerConfig(new IntegrityCheckerConfig().setEnabled(true));
+    // Configure the sessions map
+    config.getMapConfig(SESSIONS_MAP_NAME)
+        .addAttributeConfig(attributeConfig).addIndexConfig(
+            new IndexConfig(IndexType.HASH, Hazelcast4IndexedSessionRepository.PRINCIPAL_NAME_ATTRIBUTE));
 
-    clientConfig.setUserCodeDeploymentConfig(clientUserCodeDeploymentConfig);
-    return HazelcastClient.newHazelcastClient(clientConfig);
+    /*config.getUserCodeDeploymentConfig()
+        .setEnabled(true)
+        .setClassCacheMode(UserCodeDeploymentConfig.ClassCacheMode.ETERNAL)
+        .setProviderMode(UserCodeDeploymentConfig.ProviderMode.LOCAL_AND_CACHED_CLASSES)
+        .setBlacklistedPrefixes("com.arval.crp")
+        //.setWhitelistedPrefixes("com.bar.MyClass")
+        .setProviderFilter("HAS_ATTRIBUTE:lite");*/
+
+    return Hazelcast.newHazelcastInstance(config);
   }
 
   @Bean
-  public SessionRepositoryCustomizer<Hazelcast4IndexedSessionRepository>
-  customize() {
+  public SessionRepositoryCustomizer<Hazelcast4IndexedSessionRepository> customize() {
     return (sessionRepository) -> {
       sessionRepository.setFlushMode(FlushMode.IMMEDIATE);
       sessionRepository.setSaveMode(SaveMode.ALWAYS);
