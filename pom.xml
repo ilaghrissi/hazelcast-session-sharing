@@ -13,10 +13,16 @@
 	<version>0.0.1-SNAPSHOT</version>
 	<name>hazelcast-session-sharing</name>
 	<description>Demo project for Spring Boot</description>
+<packaging>war</packaging>
 	<properties>
 		<java.version>8</java.version>
 		<hazelcast-client.version>5.1</hazelcast-client.version>
+		<dockerfile-maven-plugin.version>1.4.13</dockerfile-maven-plugin.version>
+		<docker.src>${project.basedir}/target</docker.src>
+		<docker.repository.image>${project.artifactId}</docker.repository.image>
+		<docker.repository>hub.docker.com/repository/docker/imadtutorials/hazelcast-session-sharing</docker.repository>
 	</properties>
+
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -54,6 +60,64 @@
 
 	<build>
 		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-resources-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>copy-docker-file</id>
+						<phase>validate</phase>
+						<goals>
+							<goal>copy-resources</goal>
+						</goals>
+						<configuration>
+							<outputDirectory>target</outputDirectory>
+							<useDefaultDelimiters>false</useDefaultDelimiters>
+							<delimiters>
+								<delimiter>#</delimiter>
+							</delimiters>
+							<resources>
+								<resource>
+									<directory>src/main/docker/</directory>
+									<filtering>true</filtering>
+									<includes>
+										<include>**</include>
+									</includes>
+								</resource>
+							</resources>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<groupId>com.spotify</groupId>
+				<artifactId>dockerfile-maven-plugin</artifactId>
+				<version>${dockerfile-maven-plugin.version}</version>
+
+				<executions>
+					<execution>
+						<id>default</id>
+						<phase>deploy</phase>
+						<goals>
+							<goal>build</goal>
+							<goal>push</goal>
+						</goals>
+					</execution>
+				</executions>
+
+				<configuration>
+					<dockerfile>${docker.src}/Dockerfile</dockerfile>
+					<contextDirectory>${docker.src}</contextDirectory>
+					<dockerInfoDirectory>${docker.src}/info</dockerInfoDirectory>
+					<repository>${docker.repository}/${docker.repository.image}</repository>
+					<useMavenSettingsForAuth>true</useMavenSettingsForAuth>
+					<tag>${project.version}</tag>
+					<useMavenSettingsForAuth>true</useMavenSettingsForAuth>
+				</configuration>
+			</plugin>
+
+
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
